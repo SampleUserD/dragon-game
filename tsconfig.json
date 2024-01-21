@@ -1,0 +1,28 @@
+{
+  "compileOnSave": true,
+  "compilerOptions": {
+    "module": "ES6",
+    "target": "es2015",
+    "noImplicitAny": true,
+    "removeComments": true,
+    "preserveConstEnums": true,
+    "sourceMap": true,
+
+    "outDir": "./typescript-scripts"
+  },
+  "include": [
+    "./**/*.ts"
+  ],
+  "exclude": [
+    "assets",
+    "node_modules",
+    "bower_components",
+    "jspm_packages"
+  ],
+  "typeAcquisition": {
+    "enable": true
+  },
+  "files": [  
+    ""
+  ]
+}

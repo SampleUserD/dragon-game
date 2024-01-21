@@ -1,0 +1,587 @@
+<html>
+	<head>
+		<title>Snake game</title>
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
+		</style>
+	</head>
+	<body>
+		<canvas id="canvas"></canvas>
+		<script src="./index.test.js" type="module"></script>
+		<script>
+		
+		
+			class ItemOptional {
+				constructor() {
+					
+				}
+			}
+		
+			class Item {
+				constructor(length, name, namespace = "game") {
+					this.optional = new ItemOptional();
+					
+					this.length = length;
+					this.name = name;
+					this.namespace = namespace;
+				}
+			}
+			
+			class Inventory {
+				constructor() {
+					this.slots = [];
+				}
+				
+				getItemsByName(name) {
+					return this.slots.filter(item => item.name === name);
+				}
+			}
+			
+			class CraftRecipe {
+				constructor(result, recipe) {
+					this.recipe = (!Array.isArray(recipe)) ? [] : recipe;
+					this.result = result;
+				}
+				
+				craft(inventory) {
+					for (let index = 0; index < this.recipe.length; index++) {
+						const item = this.recipe[index];
+						const inventoryItem = inventory.getItemsByName(item.name)[0];
+						
+						if (inventoryItem.length >= item.length) {
+							inventoryItem.length -= item.length;
+						} else {
+							return null;
+						}
+					}
+					
+					return Object.assign({}, this.result);
+				}
+			}
+			
+			
+			class Player {
+				#_blocks = [];
+
+				constructor() {
+
+				}
+
+
+			}
+			
+			
+			function consistentImageLoad(imagesURLS, callback) {
+				function load(index, images, callback) {
+					const image = new Image();
+					image.src = imagesURLS[index];
+					
+					image.onload = () => {
+						images[imagesURLS[index]] = image;
+					
+						if (index >= imagesURLS.length - 1) {
+							return callback(images);
+						}
+					
+						load(index + 1, images, callback);
+					}
+				}
+				
+				return load(0, {}, callback);
+			}
+			
+			
+			window.onload = function() {
+				const canvas = document.querySelector("#canvas");
+				const context = canvas.getContext("2d");
+				
+				const recipes = [ 
+					new CraftRecipe(new Item(2, "stone"), [ new Item(1, "stone") ]) 
+				];
+				
+				canvas.width = innerWidth;
+				canvas.height = innerHeight;
+				
+				const joystick = { 
+					origin: { x: 100, y: 100 },
+					current: { x: 0, y: 0 },
+					vector: { X: 0, Y: 0 },
+					previous: { x: null, y: null },
+					radius: 100
+				};
+				
+				const player = { 
+					size: 25, 
+					blocks: [{ X: canvas.width / 2, Y: canvas.height / 2 }],
+					inventory: new Inventory()
+				};
+
+
+				const VirtualCamera = { target: null, coordinates: { X: canvas.width/2, Y: canvas.height/2 }, size: [ (canvas.width - canvas.width%player.size)/player.size, (canvas.height - canvas.height%player.size)/player.size ] }; // size: 10 blocks x 10 blocks
+
+
+				const GameRules = { 'rememberJoystickParams': false };
+
+
+				const offsets = [ canvas.width%player.size/2, canvas.height%player.size/2 ];
+				const blocksNumbers = [ (canvas.width - offsets[0]*2)/player.size, (canvas.height - offsets[1]*2)/player.size ];
+
+				const Borders = { X: offsets[0], Y: offsets[1], Width: canvas.width - canvas.width%player.size, Height: canvas.height - canvas.height%player.size };
+				
+
+				let speedCutCoefficient = 0.6; // 0.3
+
+
+				for(let index = 1; index <= 10; index++) {
+					player.blocks.push({ X: player.blocks[0].X + player.size*index, Y: player.blocks[0].Y });
+				}
+
+				
+				context.lineWidth = 1;
+				context.textBaseline = 'top';
+				context.textAlign = 'left';
+				context.font = '12px Helvetica';
+
+
+				function getBooleanTypeByKeyWord(keyword) {
+					switch(keyword) {
+						case 'true': return true; break;
+						case 'false': return false; break;
+					}
+				}
+
+
+				window.onkeydown = function(event) {
+					const keyCode = event.code.toLowerCase();
+
+					if (event.ctrlKey && keyCode === 'minus') {
+						VirtualCamera.size[0] = VirtualCamera.size[0]*1.05;
+						VirtualCamera.size[1] = VirtualCamera.size[1]*1.05;
+
+						event.preventDefault();
+					}
+
+					if (event.ctrlKey && keyCode === 'equal') {
+						VirtualCamera.size[0] = VirtualCamera.size[0]/1.05;
+						VirtualCamera.size[1] = VirtualCamera.size[1]/1.05;
+
+						event.preventDefault();
+					}
+
+					if (keyCode === 'enter') {
+						const parsedCommand = (prompt('Insert command("/help" for help):', '/') || '').split(' ').filter(coordinate => coordinate.trim());
+						const mappingCoordinatesByNumber = [ 'X', 'Y' ];
+						
+						if (parsedCommand[0] === '/tp') {
+							let coordinates = [ offsets[0] + parseFloat(parsedCommand[1]) * player.size || player.blocks[0].X - player.blocks[0].X%player.size, offsets[1] + parseFloat(parsedCommand[2]) * player.size || player.blocks[0].Y - player.blocks[0].Y%player.size ];
+
+							for (let index = 1; index < parsedCommand.length; index++) {
+								const coordinate = parsedCommand[index].match(/\~(\-?[0-9]+)/);
+
+								coordinates[index - 1] = (coordinate !== null) ? offsets[index - 1] + player.blocks[0][mappingCoordinatesByNumber[index - 1]] - player.blocks[0][mappingCoordinatesByNumber[index - 1]]%player.size + parseFloat(coordinate[1])*player.size : coordinates[index - 1]; 
+							}
+
+							player.blocks[0].X = coordinates[0];
+							player.blocks[0].Y = coordinates[1];
+						}
+
+
+						if (parsedCommand[0] === '/size') {
+							let size = parseInt(parsedCommand[1]);
+
+							if (size > 0) {
+								player.size = size;
+
+								offsets[0] = canvas.width%player.size/2;
+								offsets[1] = canvas.height%player.size/2;
+								
+								blocksNumbers[0] = (canvas.width - offsets[0]*2)/player.size;
+								blocksNumbers[1] = (canvas.height - offsets[1]*2)/player.size;
+							}
+						}
+
+
+						if (parsedCommand[0] === '/speed') {
+							let speed = parseFloat(parsedCommand[1]);
+
+							if (speed > 0) {
+								speedCutCoefficient = speed/10*0.3/2*player.size/defaultSize; // 10 b/s -> @size
+							}
+						}
+
+
+						if (parsedCommand[0] === '/borders') {
+							if (parsedCommand[1] === 'info') {
+								alert(`(${ Borders.X }, ${ Borders.Y }, ${ Borders.Width }, ${ Borders.Height })`);
+								
+								return undefined;
+							}
+
+							if (parsedCommand[1] === 'default') {
+								Borders.X = 0;
+								Borders.Y = 0;
+								Borders.Width = canvas.width;
+								Borders.Height = canvas.height;
+
+								return undefined;
+							}
+
+							let coordinates = [ offsets[0] + parseFloat(parsedCommand[1]) * player.size || player.blocks[0].X - player.blocks[0].X%player.size, offsets[1] + parseFloat(parsedCommand[2]) * player.size || player.blocks[0].Y - player.blocks[0].Y%player.size ];
+							let size = [ parseInt(parsedCommand[3])*player.size || canvas.width, parseInt(parsedCommand[4])*player.size || canvas.height ];
+
+							for (let index = 1; index < 3; index++) {
+								const coordinate = parsedCommand[index].match(/\~(\-?[0-9]+)/);
+
+								coordinates[index - 1] = (coordinate !== null) ? offsets[index - 1] + player.blocks[0][mappingCoordinatesByNumber[index - 1]] - player.blocks[0][mappingCoordinatesByNumber[index - 1]]%player.size + parseFloat(coordinate[1])*player.size : coordinates[index - 1]; 
+							}
+
+							Borders.X = coordinates[0];
+							Borders.Y = coordinates[1];
+							Borders.Width = size[0];
+							Borders.Height = size[1];
+						}
+
+
+						if (parsedCommand[0] === '/vc') {
+							if (parsedCommand[1] === 'set') {
+								if (parsedCommand[2] === 'default') {
+									VirtualCamera.coordinates.X = canvas.width/2;
+									VirtualCamera.coordinates.Y = canvas.height/2;
+
+									return undefined;
+								}
+
+								let coordinates = [ (offsets[0] + parseFloat(parsedCommand[2])*player.size), (offsets[1] + parseFloat(parsedCommand[3]) * player.size) ];
+
+								coordinates = coordinates.map(coordinate => isNaN(coordinate) ? canvas.width / 2 : coordinate);
+
+								for (let index = 2; index < parsedCommand.length; index++) {
+									const coordinate = parsedCommand[index].match(/\~(\-?[0-9]+)/);
+
+									coordinates[index - 1] = (coordinate !== null) ? offsets[index - 1] + player.blocks[0][mappingCoordinatesByNumber[index - 1]] - player.blocks[0][mappingCoordinatesByNumber[index - 1]]%player.size + parseFloat(coordinate[1])*player.size : coordinates[index - 1]; 
+								}
+
+								VirtualCamera.coordinates.X = coordinates[0];
+								VirtualCamera.coordinates.Y = coordinates[1];
+							}
+
+							if (parsedCommand[1] === 'info') {
+								alert(`VC coordinates: (${ VirtualCamera.coordinates.X }, ${ VirtualCamera.coordinates.Y })`);
+							}
+						}
+
+
+						if (parsedCommand[0] === '/gamerule') {
+							if (parsedCommand[1] === 'set') {
+								if (parsedCommand[2] in GameRules) {
+									GameRules[parsedCommand[2]] = getBooleanTypeByKeyWord(parsedCommand[3].toLowerCase());
+								}
+							}
+
+							if (parsedCommand[1] === 'info') {
+								if (parsedCommand[2] in GameRules) {
+									alert(GameRules[parsedCommand[2]]);
+								}
+							}	
+						}
+
+
+						if (parsedCommand[0] === '/help') {
+							alert(`
+								Commands:
+									\n\t/tp [blockX] [blockY] - teleports player on/to block([blockX]; [blockY])
+									\n\t/size [size] - changes block(and player) size to [size]
+									\n\t/speed [speed] - changes player's speed to [speed]
+									\n\t/vc
+									\n\t\t info - shows up coordinate of virtual camera
+									\n\t\t set - sets coordinates of virtual camera
+									\n\t\t\t default - sets coordinates virtual camera to default
+									\n\t\t\t [blockX] [blockY] - sets coordinates on/to block([blockX];[blockY])
+									\n\t/borders [x] [y] [w] [h]
+									\n\t\t/borders default - sets default values to borders values
+									\n\t\t/borders info - shows up info about borders
+							`.trim().replace(/\t/g, '  '));
+						}
+
+
+						event.preventDefault();
+					}
+				}
+
+				
+				canvas.onmousedown = function(event) {
+					joystick.current.x = event.x;
+					joystick.current.y = event.y;
+					
+					joystick.origin.x = event.x;
+					joystick.origin.y = event.y;
+				
+					canvas.onmousemove = function(event) {
+						joystick.current.x = event.x;
+						joystick.current.y = event.y;
+						
+						if ((joystick.current.x - joystick.origin.x)**2 + (joystick.current.y - joystick.origin.y)**2 <= joystick.radius**2) {
+							joystick.previous.x = joystick.current.x;
+							joystick.previous.y = joystick.current.y;
+						
+							joystick.vector.X = joystick.current.x - joystick.origin.x;
+							joystick.vector.Y = joystick.current.y - joystick.origin.y;
+						} else {
+							const coefficient = joystick.radius/Math.sqrt((joystick.current.x - joystick.origin.x)**2+(joystick.current.y - joystick.origin.y)**2);
+
+							joystick.previous.x = joystick.radius/Math.sqrt((joystick.current.x - joystick.origin.x)**2+(joystick.current.y - joystick.origin.y)**2)*(joystick.current.x - joystick.origin.x) + joystick.origin.x;
+							joystick.previous.y = joystick.radius/Math.sqrt((joystick.current.x - joystick.origin.x)**2+(joystick.current.y - joystick.origin.y)**2)*(joystick.current.y - joystick.origin.y) + joystick.origin.y;
+
+							joystick.vector.X = (joystick.current.x - joystick.origin.x)*coefficient;
+							joystick.vector.Y = (joystick.current.y - joystick.origin.y)*coefficient;
+						}
+					}
+				}
+				
+				canvas.onmouseup = function(event) {
+					canvas.onmousemove = null;
+					
+					if (!GameRules.rememberJoystickParams) {
+						joystick.previous.x = null;
+						joystick.previous.y = null;
+					}
+				}
+				
+				
+				for (let index = 0; index < 27; index++) {
+					player.inventory.slots.push(null);
+				}
+				
+				
+				player.inventory.slots[0] = new Item(999, "stone");
+				player.inventory.slots[1] = new Item(367, "stone");
+				
+				player.inventory.slots[19] = new Item(285, "wood");
+				player.inventory.slots[18] = new Item(131, "iron");
+				player.inventory.slots[20] = new Item(999, "copper");
+				player.inventory.slots[26] = new Item(131, "lead");
+				
+				const inventorySettings = { slotsInRow: 9, size: 50, space: 10, offset: { x: 10, y: 10 } };
+				const inventoryRows = player.inventory.slots.length / inventorySettings.slotsInRow;
+
+
+				let lastMovement = Date.now();
+				let speed = 10;
+
+
+				const defaultSize = player.size;
+
+				
+				consistentImageLoad([ 
+					`game-images/game-stone.jpg`, `game-images/game-wood.jpg`,
+					`game-images/game-copper.jpg`, `game-images/game-iron.jpg`,
+					`game-images/game-lead.jpg`
+				], function(images) {
+					setTimeout(function loop() {
+						context.clearRect(0, 0, canvas.width, canvas.height);
+
+						context.setTransform((canvas.width - canvas.width%player.size)/(VirtualCamera.size[0]*player.size), 0, 0, (canvas.height - canvas.height%player.size)/(VirtualCamera.size[1]*player.size), 0, 0);
+
+						context.translate(VirtualCamera.size[0]*player.size*VirtualCamera.coordinates.X/canvas.width - player.blocks[0].X, VirtualCamera.size[1]*player.size*VirtualCamera.coordinates.Y/canvas.height - player.blocks[0].Y);
+						
+						context.beginPath();
+
+						context.strokeStyle = 'red';
+						context.lineWidth = player.size/10;
+
+						context.moveTo(Borders.X, Borders.Y);
+						context.lineTo(Borders.X, Borders.Y + Borders.Height);
+
+						context.moveTo(Borders.X, Borders.Y);
+						context.lineTo(Borders.X + Borders.Width, Borders.Y);
+
+						context.moveTo(Borders.X + Borders.Width, Borders.Y);
+						context.lineTo(Borders.X + Borders.Width, Borders.Y + Borders.Height);
+
+						context.moveTo(Borders.X, Borders.Y + Borders.Height);
+						context.lineTo(Borders.X + Borders.Width, Borders.Y + Borders.Height);
+
+						context.stroke();
+
+						context.beginPath();
+
+						context.strokeStyle = 'black';
+						context.fillStyle = 'black';
+
+						context.lineWidth = 1;
+
+						for (let x = (player.blocks[0].X - player.blocks[0].X%player.size)/player.size - (player.blocks[0].X - player.blocks[0].X%player.size)/player.size%400; x <= (player.blocks[0].X + canvas.width - (player.blocks[0].X + canvas.width)%player.size)/player.size; x += 20) {
+							for (let y = (player.blocks[0].Y - player.blocks[0].Y%player.size)/player.size - (player.blocks[0].Y - player.blocks[0].Y%player.size)/player.size%400; y <= (player.blocks[0].Y + canvas.height - (player.blocks[0].Y + canvas.height)%player.size)/player.size; y += 20) {
+								context.fillRect(offsets[0] + player.size*x, offsets[1] + player.size*y, player.size, player.size);
+							}
+						}
+
+						context.beginPath();
+
+						for (let x = (player.blocks[0].X - player.blocks[0].X%player.size)/player.size - canvas.width/2 - (canvas.width/2)%player.size; x <= (player.blocks[0].X + canvas.width - (player.blocks[0].X + canvas.width)%player.size)/player.size; x++) {
+							context.moveTo(offsets[0] + player.size*x, offsets[1]);
+							context.lineTo(offsets[0] + player.size*x, offsets[1] + canvas.height + (player.blocks[0].Y + canvas.height - (player.blocks[0].Y + canvas.height)%canvas.height));
+						}
+
+						for (let y = (player.blocks[0].Y - player.blocks[0].Y%player.size)/player.size - canvas.height/2 - (canvas.height/2)%player.size; y <= (player.blocks[0].Y + canvas.height - (player.blocks[0].Y + canvas.height)%player.size)/player.size; y++) {
+							context.moveTo(offsets[0], offsets[1] + player.size*y);
+							context.lineTo(offsets[0] + canvas.width + (player.blocks[0].X + canvas.width - (player.blocks[0].X + canvas.width)%canvas.width), offsets[1] + player.size*y);
+						}
+						
+
+						/*for (let x = 0; x <= blocksNumbers[0]; x++) {
+							context.moveTo(offsets[0] + player.size*x, offsets[1]);
+							context.lineTo(offsets[0] + player.size*x, offsets[1] + canvas.height - canvas.height%player.size);
+						}
+
+						for (let y = 0; y <= blocksNumbers[1]; y++) {
+							context.moveTo(offsets[0], offsets[1] + player.size*y);
+							context.lineTo(offsets[0] + canvas.width - canvas.width%player.size, offsets[1] + player.size*y);
+						}*/
+
+						context.stroke();
+						context.beginPath();
+
+						context.setTransform(1, 0, 0, 1, 0, 0);
+
+						context.fillStyle = 'black';
+						context.fillText(`Coordinates: (${ parseInt(player.blocks[0].X) }; ${ parseInt(player.blocks[0].Y) })`, canvas.width / 2, canvas.height / 2 - 12*1);
+						context.fillText(`Blocks: (${ (player.blocks[0].X - player.blocks[0].X%player.size)/player.size }; ${ (player.blocks[0].Y - player.blocks[0].Y%player.size)/player.size  })`, canvas.width / 2, canvas.height / 2 - 12*2);
+						context.fillText(`Speed: ${ parseInt(Math.sqrt(joystick.vector.X**2 + joystick.vector.Y**2)/player.size/0.06/((1000 - speed)/1000)*speedCutCoefficient)} b/s`, canvas.width / 2, canvas.height / 2 - 12*3);
+
+						context.strokeStyle = 'black';
+						context.lineWidth = 1;
+
+
+						if (!(joystick.previous.x == null || joystick.previous.y == null)) {
+							if (Date.now() - lastMovement >= speed) {
+								let tail = player.blocks.pop();
+
+								tail.X = player.blocks[0].X + joystick.vector.X*speedCutCoefficient;
+								tail.Y = player.blocks[0].Y + joystick.vector.Y*speedCutCoefficient;
+
+								player.blocks.unshift(tail);
+							
+								lastMovement = Date.now();
+							}
+
+							context.fillStyle = 'rgba(0, 0, 0, 0.3)';
+
+							context.beginPath();
+							context.arc(joystick.origin.x, joystick.origin.y, joystick.radius, 0, Math.PI * 2);
+							context.stroke();
+
+							context.beginPath();
+							context.arc(joystick.origin.x, joystick.origin.y, joystick.radius, 0, Math.PI * 2);
+							context.fill();
+						
+							context.beginPath();
+						
+							context.moveTo(joystick.origin.x, joystick.origin.y);
+							context.lineTo(joystick.previous.x, joystick.previous.y);
+							
+							context.stroke();
+
+							context.fillStyle = 'orange';
+							
+							context.beginPath();
+							context.arc(joystick.origin.x, joystick.origin.y, 5, 0, Math.PI * 2);
+							if (!(joystick.previous.x == null || joystick.previous.y == null)) {
+								context.arc(joystick.previous.x, joystick.previous.y, 5, 0, Math.PI * 2);
+							}
+							context.fill();
+							context.beginPath();
+							
+							if (Borders.X >= player.blocks[0].X - offsets[0]) {
+								player.blocks[0].X = (Borders.X || offsets[0]);
+							}
+							
+							if (Borders.Y >= player.blocks[0].Y - offsets[1]) {
+								player.blocks[0].Y = (Borders.Y || offsets[1]);
+							}
+							
+							if (Borders.X + Borders.Width <= player.blocks[0].X) {
+								player.blocks[0].X = Borders.Width - offsets[0];
+							}
+							
+							if (Borders.Y + Borders.Height <= player.blocks[0].Y) {
+								player.blocks[0].Y = Borders.Height - offsets[1];
+							}
+						}	
+
+						context.setTransform((canvas.width - canvas.width%player.size)/(VirtualCamera.size[0]*player.size), 0, 0, (canvas.height - canvas.height%player.size)/(VirtualCamera.size[1]*player.size), 0, 0);
+						
+						context.translate(VirtualCamera.size[0]*player.size*VirtualCamera.coordinates.X/canvas.width - player.blocks[0].X, VirtualCamera.size[1]*player.size*VirtualCamera.coordinates.Y/canvas.height - player.blocks[0].Y);
+
+						context.moveTo(0, 0);
+						context.lineTo(0, canvas.width);
+
+						context.lineWidth = 5;
+
+						player.blocks.forEach(function(block, index) {
+							context.fillStyle = `rgba(${ 200 + index*5 }, 0, 0, 0.9)`;
+							context.strokeStyle = `rgba(${ 200 + index*5 }, 0, 0, 0.9)`;
+
+							if (index - 1 >= 0) {
+								context.beginPath();
+								
+								context.moveTo(player.blocks[index - 1].X + player.size*3/2 - (this.length - index)*1/2, player.blocks[index - 1].Y + player.size*3/2 - (this.length - index)*1/2);
+								context.lineTo(block.X + player.size*3/2 - (this.length - index)*1/2, block.Y + player.size*3/2 - (this.length - index)*1/2);
+
+								context.stroke();
+
+								context.beginPath();
+							}
+
+							context.fillRect(block.X + (player.size - (this.length - index)), block.Y + (player.size - (this.length - index)), player.size + this.length - index, player.size + this.length - index);
+						});
+
+						context.strokeStyle = 'black';
+						context.fillStyle = 'red';
+
+						context.lineWidth = 1;
+						
+						context.setTransform(1, 0, 0, 1, 0, 0);
+
+						/*for (let x = 0; x < inventorySettings.slotsInRow; x++) {
+							for (let y = 0; y < inventoryRows; y++) {
+								const item = player.inventory.slots[x + y*inventorySettings.slotsInRow];
+								
+								if (item !== null) {
+									context.drawImage(
+										images[`game-images/game-${ item.name }.jpg`],
+										x * inventorySettings.size + inventorySettings.space*x + inventorySettings.offset.x,
+										y * inventorySettings.size + inventorySettings.space*y + inventorySettings.offset.y,
+										inventorySettings.size,
+										inventorySettings.size
+									);
+									
+									context.strokeText(
+										item.length,
+										x * inventorySettings.size + inventorySettings.space*x + inventorySettings.offset.x,
+										y * inventorySettings.size + inventorySettings.space*y + inventorySettings.offset.y + inventorySettings.size - inventorySettings.space,
+										inventorySettings.size
+									);
+								}
+							
+								context.strokeRect(
+									x * inventorySettings.size + inventorySettings.space*x + inventorySettings.offset.x, 
+									y * inventorySettings.size + inventorySettings.space*y + inventorySettings.offset.y, 
+									inventorySettings.size, 
+									inventorySettings.size
+								);
+							}
+						}*/
+						
+						setTimeout(() => loop(), 60);
+					}, 60);
+				});
+			}
+			
+		</script>
+	</body>
+</html>

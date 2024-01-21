@@ -1,0 +1,74 @@
+Объект для рассмотрения:
+const joystick = { 
+	origin: { x: 100, y: 100 },
+	current: { x: 0, y: 0 },
+	vector: { X: 0, Y: 0 },
+	previous: { x: null, y: null },
+	radius: 100
+}
+
+Имеет свойства:
+	origin - начало отсчета координат
+	current - текущее положение мышки/тапа 
+	vector - вектор
+	previous - предыдущее положение мышки/тапа
+	radius - радиус области, которая ограничивает stick joystick'а
+
+Принцип работы объекта:
+	Вектор скорости, привязанный к игроку(назовем V), коллинеарен вектору "vector"(назовем S), 
+	то есть один вектор выражается через другой так: V = r*S, где r - произвольный скаляр.
+	Пусть V = { V(x), V(y) }, известно, что S = { current.x - origin.x, current.y - origin.y }.
+	Из равенства V = r*S => V(x) = r*(current.x - origin.x), V(y) = r*(current.y - origin.y)
+
+Используется в:
+	tail.X = player.blocks[0].X + joystick.vector.X*speedCutCoefficient;
+	tail.Y = player.blocks[0].Y + joystick.vector.Y*speedCutCoefficient; - отражает прицип работы
+
+Реализация работы:
+	canvas.onmousedown = function(event) {
+		joystick.current.x = event.x;
+		joystick.current.y = event.y;
+					
+		joystick.origin.x = event.x;
+		joystick.origin.y = event.y;
+				
+		canvas.onmousemove = function(event) {
+			joystick.current.x = event.x;
+			joystick.current.y = event.y;
+						
+			if ((joystick.current.x - joystick.origin.x)**2 + (joystick.current.y - joystick.origin.y)**2 <= joystick.radius**2) {
+				joystick.previous.x = joystick.current.x;
+				joystick.previous.y = joystick.current.y;
+						
+				joystick.vector.X = joystick.current.x - joystick.origin.x;
+				joystick.vector.Y = joystick.current.y - joystick.origin.y;
+			} else {
+				const coefficient = joystick.radius/Math.sqrt((joystick.current.x - joystick.origin.x)**2+(joystick.current.y - joystick.origin.y)**2);
+
+				joystick.previous.x = joystick.radius/Math.sqrt((joystick.current.x - joystick.origin.x)**2+(joystick.current.y - joystick.origin.y)**2)*(joystick.current.x - joystick.origin.x) + joystick.origin.x;
+				joystick.previous.y = joystick.radius/Math.sqrt((joystick.current.x - joystick.origin.x)**2+(joystick.current.y - joystick.origin.y)**2)*(joystick.current.y - joystick.origin.y) + joystick.origin.y;
+
+				joystick.vector.X = (joystick.current.x - joystick.origin.x)*coefficient;
+				joystick.vector.Y = (joystick.current.y - joystick.origin.y)*coefficient;
+			}
+		}
+	}
+				
+	canvas.onmouseup = function(event) {
+		canvas.onmousemove = null;
+					
+		if (!GameRules.rememberJoystickParams) {
+			joystick.previous.x = null;
+			joystick.previous.y = null;
+		}
+	}
+
+
+То есть, чтобы определить, что такое joystick нужны определения: вектор, точки. 
+После определения объект joystick будет иметь такое определение:
+	const joystick = {
+		origin:  Point2D
+		current: Point2D,
+		vector:  Vector2D,
+		Radius:  Number
+	}
